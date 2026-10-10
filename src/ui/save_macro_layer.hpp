@@ -7,6 +7,7 @@ class SaveMacroLayer : public geode::Popup {
     TextInput* descInput = nullptr;
     TextInput* nameInput = nullptr;
 
+    CCMenuItemToggler* gdrToggle = nullptr;
     CCMenuItemToggler* jsonToggle = nullptr;
     CCMenuItemToggler* gdr2Toggle = nullptr;
     CCMenuItemToggler* cmsToggle = nullptr;
@@ -57,33 +58,44 @@ private:
 
         CCSprite* spriteOn = CCSprite::createWithSpriteFrameName("GJ_checkOn_001.png");
         CCSprite* spriteOff = CCSprite::createWithSpriteFrameName("GJ_checkOff_001.png");
+        gdrToggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleGDR));
+        gdrToggle->setPosition({ -105, -78 });
+        gdrToggle->setScale(0.575);
+        gdrToggle->toggle(true);
+        menu->addChild(gdrToggle);
+
+        lbl = CCLabelBMFont::create("GDR", "bigFont.fnt");
+        lbl->setPosition({ -82, -77.5 });
+        lbl->setScale(0.375);
+        menu->addChild(lbl);
+
         jsonToggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleJSON));
-        jsonToggle->setPosition({ -124, -78 });
+        jsonToggle->setPosition({ -35, -78 });
         jsonToggle->setScale(0.575);
         menu->addChild(jsonToggle);
 
         lbl = CCLabelBMFont::create("JSON", "bigFont.fnt");
-        lbl->setPosition({ -97, -77.5 });
+        lbl->setPosition({ -17, -77.5 });
         lbl->setScale(0.375);
         menu->addChild(lbl);
 
         gdr2Toggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleGDR2));
-        gdr2Toggle->setPosition({ 22, -78 });
+        gdr2Toggle->setPosition({ 35, -78 });
         gdr2Toggle->setScale(0.575);
         menu->addChild(gdr2Toggle);
 
         lbl = CCLabelBMFont::create("GDR2", "bigFont.fnt");
-        lbl->setPosition({ 53, -77.5 });
+        lbl->setPosition({ 58, -77.5 });
         lbl->setScale(0.375);
         menu->addChild(lbl);
 
         cmsToggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleCMS));
-        cmsToggle->setPosition({ 122, -78 });
+        cmsToggle->setPosition({ 103, -78 });
         cmsToggle->setScale(0.575);
         menu->addChild(cmsToggle);
 
         lbl = CCLabelBMFont::create("CMS", "bigFont.fnt");
-        lbl->setPosition({ 153, -77.5 });
+        lbl->setPosition({ 126, -77.5 });
         lbl->setScale(0.375);
         menu->addChild(lbl);
 
@@ -93,9 +105,14 @@ private:
 public:
 
     void clearFormats(CCMenuItemToggler* active) {
+        if (active != gdrToggle) gdrToggle->toggle(false);
         if (active != jsonToggle) jsonToggle->toggle(false);
         if (active != gdr2Toggle) gdr2Toggle->toggle(false);
         if (active != cmsToggle) cmsToggle->toggle(false);
+    }
+
+    void toggleGDR(CCObject*) {
+        if (gdrToggle->isToggled()) clearFormats(gdrToggle);
     }
 
     void toggleJSON(CCObject*) {
