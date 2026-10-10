@@ -7,10 +7,10 @@ class SaveMacroLayer : public geode::Popup {
     TextInput* descInput = nullptr;
     TextInput* nameInput = nullptr;
 
-    CCMenuItemToggler* gdrToggle = nullptr;
-    CCMenuItemToggler* jsonToggle = nullptr;
-    CCMenuItemToggler* gdr2Toggle = nullptr;
-    CCMenuItemToggler* cmsToggle = nullptr;
+    CCMenuItemSpriteExtra* formatButton = nullptr;
+    CCMenu* formatMenu = nullptr;
+    CCLabelBMFont* formatLabel = nullptr;
+    int selectedFormat = 0;
 
 private:
 
@@ -56,75 +56,49 @@ private:
         btn->setPositionY(-56);
         menu->addChild(btn);
 
-        CCSprite* spriteOn = CCSprite::createWithSpriteFrameName("GJ_checkOn_001.png");
-        CCSprite* spriteOff = CCSprite::createWithSpriteFrameName("GJ_checkOff_001.png");
-        gdrToggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleGDR));
-        gdrToggle->setPosition({ -105, -78 });
-        gdrToggle->setScale(0.575);
-        gdrToggle->toggle(true);
-        menu->addChild(gdrToggle);
+        ButtonSprite* formatSprite = ButtonSprite::create("GDR", "goldFont.fnt", "GJ_button_04.png");
+        formatSprite->setScale(0.62f);
+        formatButton = CCMenuItemSpriteExtra::create(formatSprite, this, menu_selector(SaveMacroLayer::toggleFormatMenu));
+        formatButton->setPosition({ 0, -78 });
+        menu->addChild(formatButton);
 
-        lbl = CCLabelBMFont::create("GDR", "bigFont.fnt");
-        lbl->setPosition({ -82, -77.5 });
-        lbl->setScale(0.375);
-        menu->addChild(lbl);
+        formatLabel = CCLabelBMFont::create("Format", "chatFont.fnt");
+        formatLabel->setScale(0.45f);
+        formatLabel->setOpacity(130);
+        formatLabel->setPosition({ 0, -55 });
+        menu->addChild(formatLabel);
 
-        jsonToggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleJSON));
-        jsonToggle->setPosition({ -35, -78 });
-        jsonToggle->setScale(0.575);
-        menu->addChild(jsonToggle);
+        formatMenu = CCMenu::create();
+        formatMenu->setPosition({ 0, -78 });
+        formatMenu->setVisible(false);
+        menu->addChild(formatMenu);
 
-        lbl = CCLabelBMFont::create("JSON", "bigFont.fnt");
-        lbl->setPosition({ -17, -77.5 });
-        lbl->setScale(0.375);
-        menu->addChild(lbl);
-
-        gdr2Toggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleGDR2));
-        gdr2Toggle->setPosition({ 35, -78 });
-        gdr2Toggle->setScale(0.575);
-        menu->addChild(gdr2Toggle);
-
-        lbl = CCLabelBMFont::create("GDR2", "bigFont.fnt");
-        lbl->setPosition({ 58, -77.5 });
-        lbl->setScale(0.375);
-        menu->addChild(lbl);
-
-        cmsToggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleCMS));
-        cmsToggle->setPosition({ 103, -78 });
-        cmsToggle->setScale(0.575);
-        menu->addChild(cmsToggle);
-
-        lbl = CCLabelBMFont::create("CMS", "bigFont.fnt");
-        lbl->setPosition({ 126, -77.5 });
-        lbl->setScale(0.375);
-        menu->addChild(lbl);
+        const char* formats[] = { "GDR", "JSON", "GDR2", "CMS" };
+        for (int i = 0; i < 4; i++) {
+            ButtonSprite* optionSprite = ButtonSprite::create(formats[i], "goldFont.fnt", "GJ_button_04.png");
+            optionSprite->setScale(0.48f);
+            CCMenuItemSpriteExtra* option = CCMenuItemSpriteExtra::create(optionSprite, this, menu_selector(SaveMacroLayer::selectFormat));
+            option->setTag(i);
+            option->setPosition({ (i - 1.5f) * 58.f, 0 });
+            formatMenu->addChild(option);
+        }
 
         return true;
     }
 
 public:
 
-    void clearFormats(CCMenuItemToggler* active) {
-        if (active != gdrToggle) gdrToggle->toggle(false);
-        if (active != jsonToggle) jsonToggle->toggle(false);
-        if (active != gdr2Toggle) gdr2Toggle->toggle(false);
-        if (active != cmsToggle) cmsToggle->toggle(false);
+    void toggleFormatMenu(CCObject*) {
+        formatMenu->setVisible(!formatMenu->isVisible());
     }
 
-    void toggleGDR(CCObject*) {
-        if (gdrToggle->isToggled()) clearFormats(gdrToggle);
-    }
-
-    void toggleJSON(CCObject*) {
-        if (jsonToggle->isToggled()) clearFormats(jsonToggle);
-    }
-
-    void toggleGDR2(CCObject*) {
-        if (gdr2Toggle->isToggled()) clearFormats(gdr2Toggle);
-    }
-
-    void toggleCMS(CCObject*) {
-        if (cmsToggle->isToggled()) clearFormats(cmsToggle);
+    void selectFormat(CCObject* object) {
+        selectedFormat = static_cast<CCMenuItemSpriteExtra*>(object)->getTag();
+        const char* formats[] = { "GDR", "JSON", "GDR2", "CMS" };
+        formatLabel->setString(formats[selectedFormat]);
+        formatMenu->setVisible(false);
+        auto* sprite = static_cast<ButtonSprite*>(formatButton->getNormalImage());
+        sprite->setString(formats[selectedFormat]);
     }
 
     STATIC_CREATE(SaveMacroLayer, 285, 194)
@@ -154,7 +128,7 @@ public:
         std::string author = authorInput->getString();
         std::string desc = descInput->getString();
 
-        int result = Macro::save(author, desc, path.string(), jsonToggle->isToggled(), gdr2Toggle->isToggled(), cmsToggle->isToggled());
+        int result = Macro::save(author, desc, path.string(), selectedFormat == 1, selectedFormat == 2, selectedFormat == 3);
 
         if (result != 0)
             return FLAlertLayer::create("Error", "There was an error saving the macro. ID: " + std::to_string(result), "Ok")->show();

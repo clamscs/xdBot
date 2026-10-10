@@ -1,3 +1,59 @@
+# Changelog
+
+All notable changes to xdBot are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Changed
+
+- Ongoing development changes will be listed here.
+
+## [3.2.2]
+
+### Added
+
+- Added a single macro format selector for GDR, JSON, GDR2, and CMS.
+
+### Changed
+
+- Optimized CMS encoding while preserving the CMS v1 wire format.
+- Reduced unnecessary allocations when CMS input and death frames are already ordered.
+
+### Fixed
+
+- Prevented invalid CMS input counts from causing excessive allocations.
+- Kept the default macro save format on standard GDR.
+
+## Legacy Releases
+
+## [3.2.1]
+
+### Fixed
+
+- Fixed the macro save format layout and restored the standard GDR format option.
+
+## [3.2.0]
+
+### Added
+
+- Added the native CMS macro format.
+- Added GDR2 macro import and export support.
+
+## [3.1.0]
+
+### Added
+
+- Added GDR2 macro format support.
+
+## [3.0.0]
+
+### Changed
+
+- Ported the entire mod to Geometry Dash `2.2081`.
+
 # v2.4.1
 
 * Added Auto Clicker keybind.

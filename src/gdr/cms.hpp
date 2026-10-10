@@ -42,6 +42,10 @@ namespace detail {
 
 class Writer {
 public:
+    explicit Writer(size_t capacity = 0) {
+        bytes.reserve(capacity);
+    }
+
     void raw(std::span<const uint8_t> data) { bytes.insert(bytes.end(), data.begin(), data.end()); }
 
     void varint(uint64_t value) {
@@ -132,14 +136,31 @@ private:
 }
 
 inline std::vector<uint8_t> encode(Replay const& replay) {
-    detail::Writer writer;
-    std::vector<Input> inputs = replay.inputs;
-    std::stable_sort(inputs.begin(), inputs.end(), [](Input const& a, Input const& b) {
+    // Recording already produces chronological actions. Only allocate sorted copies
+    // for callers that provide out-of-order data.
+    std::vector<Input> sortedInputs;
+    auto inputs = std::span<const Input>(replay.inputs);
+    if (!std::is_sorted(inputs.begin(), inputs.end(), [](Input const& a, Input const& b) {
         return a.frame < b.frame;
-    });
+    })) {
+        sortedInputs.assign(inputs.begin(), inputs.end());
+        std::stable_sort(sortedInputs.begin(), sortedInputs.end(), [](Input const& a, Input const& b) {
+            return a.frame < b.frame;
+        });
+        inputs = sortedInputs;
+    }
 
-    std::vector<uint64_t> deaths = replay.deaths;
-    std::sort(deaths.begin(), deaths.end());
+    std::vector<uint64_t> sortedDeaths;
+    auto deaths = std::span<const uint64_t>(replay.deaths);
+    if (!std::is_sorted(deaths.begin(), deaths.end())) {
+        sortedDeaths.assign(deaths.begin(), deaths.end());
+        std::sort(sortedDeaths.begin(), sortedDeaths.end());
+        deaths = sortedDeaths;
+    }
+
+    detail::Writer writer(64 + replay.author.size() + replay.description.size()
+        + replay.botName.size() + replay.levelName.size()
+        + inputs.size() * (replay.platformer ? 2 : 1));
 
     const uint8_t magic[] = {'C', 'M', 'S'};
     writer.raw(magic);
@@ -158,18 +179,30 @@ inline std::vector<uint8_t> encode(Replay const& replay) {
     writer.varint(replay.levelId);
     writer.string(replay.levelName);
 
-    writer.varint(deaths.size());
-    uint64_t previous = 0;
+    size_t uniqueDeaths = 0;
+    uint64_t lastDeath = 0;
+    bool haveDeath = false;
     for (uint64_t death : deaths) {
-        if (death < previous) continue;
+        if (!haveDeath || death != lastDeath) {
+            uniqueDeaths++;
+            lastDeath = death;
+            haveDeath = true;
+        }
+    }
+    writer.varint(uniqueDeaths);
+    uint64_t previous = 0;
+    haveDeath = false;
+    for (uint64_t death : deaths) {
+        if (haveDeath && death == lastDeath) continue;
         writer.varint(death - previous);
         previous = death;
+        lastDeath = death;
+        haveDeath = true;
     }
 
     writer.varint(inputs.size());
     previous = 0;
     for (Input const& input : inputs) {
-        if (input.frame < previous) continue;
         const uint64_t delta = input.frame - previous;
         const uint64_t packed = replay.platformer
             ? (delta << 4) | (uint64_t(input.button & 3) << 2) | (uint64_t(input.player2) << 1) | uint64_t(input.down)
@@ -189,12 +222,11 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
     if (!reader.take(3, magic) || magic[0] != 'C' || magic[1] != 'M' || magic[2] != 'S'
         || !reader.varint(version) || version != FormatVersion
         || !reader.boolean(replay.platformer)
-        || !reader.string(replay.author) || !reader.string(replay.description)
-        || !reader.be(replay.duration))
+        || !reader.string(replay.author) || !reader.string(replay.description))
         return std::nullopt;
 
     uint64_t gameVersion, coins, botVersion, levelId;
-    if (!reader.varint(gameVersion) || !reader.be(replay.framerate)
+    if (!reader.be(replay.duration) || !reader.varint(gameVersion) || !reader.be(replay.framerate)
         || !reader.varint(replay.seed) || !reader.varint(coins)
         || !reader.boolean(replay.ldm)
         || !reader.string(replay.botName) || !reader.varint(botVersion)
@@ -217,7 +249,10 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
         replay.deaths.push_back(previous);
     }
 
-    if (!reader.varint(count) || count > reader.remaining() * 10) return std::nullopt;
+    if (!reader.varint(count)) return std::nullopt;
+    // Every input consumes at least one byte, so this is a cheap allocation cap
+    // that also avoids overflowing a remaining-bytes multiplication.
+    if (count > reader.remaining()) return std::nullopt;
     replay.inputs.reserve(static_cast<size_t>(count));
     previous = 0;
     for (uint64_t i = 0; i < count; i++) {
