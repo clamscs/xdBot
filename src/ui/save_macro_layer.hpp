@@ -9,6 +9,7 @@ class SaveMacroLayer : public geode::Popup {
 
     CCMenuItemToggler* jsonToggle = nullptr;
     CCMenuItemToggler* gdr2Toggle = nullptr;
+    CCMenuItemToggler* cmsToggle = nullptr;
 
 private:
 
@@ -76,17 +77,37 @@ private:
         lbl->setScale(0.375);
         menu->addChild(lbl);
 
+        cmsToggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleCMS));
+        cmsToggle->setPosition({ 122, -78 });
+        cmsToggle->setScale(0.575);
+        menu->addChild(cmsToggle);
+
+        lbl = CCLabelBMFont::create("CMS", "bigFont.fnt");
+        lbl->setPosition({ 153, -77.5 });
+        lbl->setScale(0.375);
+        menu->addChild(lbl);
+
         return true;
     }
 
 public:
 
+    void clearFormats(CCMenuItemToggler* active) {
+        if (active != jsonToggle) jsonToggle->toggle(false);
+        if (active != gdr2Toggle) gdr2Toggle->toggle(false);
+        if (active != cmsToggle) cmsToggle->toggle(false);
+    }
+
     void toggleJSON(CCObject*) {
-        if (jsonToggle->isToggled()) gdr2Toggle->toggle(false);
+        if (jsonToggle->isToggled()) clearFormats(jsonToggle);
     }
 
     void toggleGDR2(CCObject*) {
-        if (gdr2Toggle->isToggled()) jsonToggle->toggle(false);
+        if (gdr2Toggle->isToggled()) clearFormats(gdr2Toggle);
+    }
+
+    void toggleCMS(CCObject*) {
+        if (cmsToggle->isToggled()) clearFormats(cmsToggle);
     }
 
     STATIC_CREATE(SaveMacroLayer, 285, 194)
@@ -116,7 +137,7 @@ public:
         std::string author = authorInput->getString();
         std::string desc = descInput->getString();
 
-        int result = Macro::save(author, desc, path.string(), jsonToggle->isToggled(), gdr2Toggle->isToggled());
+        int result = Macro::save(author, desc, path.string(), jsonToggle->isToggled(), gdr2Toggle->isToggled(), cmsToggle->isToggled());
 
         if (result != 0)
             return FLAlertLayer::create("Error", "There was an error saving the macro. ID: " + std::to_string(result), "Ok")->show();

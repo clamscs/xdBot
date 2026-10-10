@@ -3,6 +3,7 @@
 #include "includes.hpp"
 #include "gdr/gdr.hpp"
 #include "gdr/gdr2.hpp"
+#include "gdr/cms.hpp"
 #include "utils/utils.hpp"
 
 using namespace geode::prelude;
@@ -50,7 +51,7 @@ public:
 
     static void recordFrameFix(int frame, PlayerObject* p1, PlayerObject* p2);
 
-    static int save(std::string author, std::string desc, std::string path, bool json = false, bool gdr2 = false);
+    static int save(std::string author, std::string desc, std::string path, bool json = false, bool gdr2 = false, bool cmsFormat = false);
 
     static Macro importFile(std::filesystem::path path);
 

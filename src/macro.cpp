@@ -82,7 +82,8 @@ void Macro::tryAutosave(GJGameLevel* level, CheckpointObject* cp) {
     std::filesystem::path path = autoSavesPath / fmt::format("autosave_{}_{}", levelname, g.currentSession);
     std::error_code ec;
     std::filesystem::remove(path.string() + ".gdr", ec);
-    std::filesystem::remove(path.string() + ".gdr2", ec); // Remove previous save
+    std::filesystem::remove(path.string() + ".gdr2", ec);
+    std::filesystem::remove(path.string() + ".cms", ec); // Remove previous save
     if (ec) log::warn("Failed to remove previous autosave");
 
     autoSave(level, g.currentSession);
@@ -143,13 +144,13 @@ void Macro::updateTPS() {
     if (g.layer) static_cast<RecordLayer*>(g.layer)->updateTPS();
 }
 
-int Macro::save(std::string author, std::string desc, std::string path, bool json, bool gdr2) {
+int Macro::save(std::string author, std::string desc, std::string path, bool json, bool gdr2, bool cmsFormat) {
     auto& g = Global::get();
 
     if (g.macro.inputs.empty()) return 31;
 
-    std::string extension = gdr2 ? ".gdr2" : (json ? ".gdr.json" : ".gdr");
-    if (gdr2) json = false;
+    std::string extension = cmsFormat ? ".cms" : (gdr2 ? ".gdr2" : (json ? ".gdr.json" : ".gdr"));
+    if (gdr2 || cmsFormat) json = false;
 
     int iterations = 0;
 
@@ -171,6 +172,43 @@ int Macro::save(std::string author, std::string desc, std::string path, bool jso
     g.macro.author = author;
     g.macro.description = desc;
     g.macro.duration = g.macro.inputs.back().frame / g.macro.framerate;
+
+    if (cmsFormat) {
+        cms::Replay replay;
+        replay.author = g.macro.author;
+        replay.description = g.macro.description;
+        replay.duration = g.macro.duration;
+#ifdef GEODE_COMP_GD_VERSION
+        replay.gameVersion = GEODE_COMP_GD_VERSION;
+#else
+        replay.gameVersion = static_cast<int>(GEODE_GD_VERSION * 10000);
+#endif
+        replay.framerate = g.macro.framerate;
+        replay.seed = g.macro.seed;
+        replay.coins = g.macro.coins;
+        replay.ldm = g.macro.ldm;
+        replay.platformer = PlayLayer::get() && PlayLayer::get()->m_levelSettings->m_platformerMode;
+        replay.botName = g.macro.botInfo.name;
+        replay.botVersion = static_cast<int>(std::strtol(g.macro.botInfo.version.c_str() + (g.macro.botInfo.version.starts_with("v") ? 1 : 0), nullptr, 10));
+        replay.levelId = g.macro.levelInfo.id;
+        replay.levelName = g.macro.levelInfo.name;
+        for (auto const& action : g.macro.inputs)
+            replay.inputs.push_back({ static_cast<uint64_t>(action.frame), static_cast<uint8_t>(action.button), action.player2, action.down });
+
+        auto data = cms::encode(replay);
+#ifdef GEODE_IS_WINDOWS
+        std::wstring widePath = Utils::widen(path);
+        if (widePath == L"Widen Error") return 30;
+        std::ofstream f(widePath, std::ios::binary);
+#else
+        std::ofstream f(path, std::ios::binary);
+#endif
+        if (!f) f.open(path, std::ios::binary);
+        if (!f) return 20;
+        f.write(reinterpret_cast<const char*>(data.data()), data.size());
+        if (!f) return 21;
+        return 0;
+    }
 
     if (gdr2) {
         gdr2::Replay replay;
@@ -246,7 +284,7 @@ int Macro::save(std::string author, std::string desc, std::string path, bool jso
 }
 
 Macro Macro::importFile(std::filesystem::path path) {
-    if (path.extension() != ".gdr2") {
+    if (path.extension() != ".gdr2" && path.extension() != ".cms") {
         std::ifstream f(path, std::ios::binary);
         if (!f) {
             Macro result;
@@ -272,6 +310,32 @@ Macro Macro::importFile(std::filesystem::path path) {
     f.seekg(0, std::ios::beg);
     std::vector<std::uint8_t> data(fileSize);
     f.read(reinterpret_cast<char*>(data.data()), fileSize);
+
+    auto decodedCMS = path.extension() == ".cms" ? cms::decode(data) : std::nullopt;
+    if (path.extension() == ".cms" && !decodedCMS) {
+        Macro result;
+        result.description = "fail";
+        return result;
+    }
+
+    if (path.extension() == ".cms") {
+        Macro result;
+        result.author = decodedCMS->author;
+        result.description = decodedCMS->description;
+        result.duration = decodedCMS->duration;
+        result.gameVersion = decodedCMS->gameVersion / 10000.f;
+        result.framerate = static_cast<float>(decodedCMS->framerate);
+        result.seed = decodedCMS->seed;
+        result.coins = decodedCMS->coins;
+        result.ldm = decodedCMS->ldm;
+        result.botInfo.name = decodedCMS->botName;
+        result.botInfo.version = std::to_string(decodedCMS->botVersion);
+        result.levelInfo.id = decodedCMS->levelId;
+        result.levelInfo.name = decodedCMS->levelName;
+        for (auto const& action : decodedCMS->inputs)
+            result.inputs.emplace_back(static_cast<int>(action.frame), action.button, action.player2, action.down);
+        return result;
+    }
 
     auto decoded = gdr2::decode(data);
     if (!decoded) {
