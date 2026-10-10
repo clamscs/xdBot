@@ -1,4 +1,7 @@
 #include "includes.hpp"
+
+#include <cstdlib>
+
 #include "ui/record_layer.hpp"
 #include "ui/game_ui.hpp"
 
@@ -78,7 +81,8 @@ void Macro::tryAutosave(GJGameLevel* level, CheckpointObject* cp) {
     std::string levelname = level->m_levelName;
     std::filesystem::path path = autoSavesPath / fmt::format("autosave_{}_{}", levelname, g.currentSession);
     std::error_code ec;
-    std::filesystem::remove(path.string() + ".gdr", ec); // Remove previous save
+    std::filesystem::remove(path.string() + ".gdr", ec);
+    std::filesystem::remove(path.string() + ".gdr2", ec); // Remove previous save
     if (ec) log::warn("Failed to remove previous autosave");
 
     autoSave(level, g.currentSession);
@@ -139,12 +143,13 @@ void Macro::updateTPS() {
     if (g.layer) static_cast<RecordLayer*>(g.layer)->updateTPS();
 }
 
-int Macro::save(std::string author, std::string desc, std::string path, bool json) {
+int Macro::save(std::string author, std::string desc, std::string path, bool json, bool gdr2) {
     auto& g = Global::get();
 
     if (g.macro.inputs.empty()) return 31;
 
-    std::string extension = json ? ".gdr.json" : ".gdr";
+    std::string extension = gdr2 ? ".gdr2" : (json ? ".gdr.json" : ".gdr");
+    if (gdr2) json = false;
 
     int iterations = 0;
 
@@ -166,6 +171,43 @@ int Macro::save(std::string author, std::string desc, std::string path, bool jso
     g.macro.author = author;
     g.macro.description = desc;
     g.macro.duration = g.macro.inputs.back().frame / g.macro.framerate;
+
+    if (gdr2) {
+        gdr2::Replay replay;
+        replay.author = g.macro.author;
+        replay.description = g.macro.description;
+        replay.duration = g.macro.duration;
+#ifdef GEODE_COMP_GD_VERSION
+        replay.gameVersion = GEODE_COMP_GD_VERSION;
+#else
+        replay.gameVersion = static_cast<int>(GEODE_GD_VERSION * 10000);
+#endif
+        replay.framerate = g.macro.framerate;
+        replay.seed = g.macro.seed;
+        replay.coins = g.macro.coins;
+        replay.ldm = g.macro.ldm;
+        replay.platformer = PlayLayer::get() && PlayLayer::get()->m_levelSettings->m_platformerMode;
+        replay.botName = g.macro.botInfo.name;
+        replay.botVersion = static_cast<int>(std::strtol(g.macro.botInfo.version.c_str() + (g.macro.botInfo.version.starts_with("v") ? 1 : 0), nullptr, 10));
+        replay.levelId = g.macro.levelInfo.id;
+        replay.levelName = g.macro.levelInfo.name;
+        for (auto const& action : g.macro.inputs)
+            replay.inputs.push_back({ static_cast<uint64_t>(action.frame), static_cast<uint8_t>(action.button), action.player2, action.down });
+
+        auto data = gdr2::encode(replay);
+#ifdef GEODE_IS_WINDOWS
+        std::wstring widePath = Utils::widen(path);
+        if (widePath == L"Widen Error") return 30;
+        std::ofstream f(widePath, std::ios::binary);
+#else
+        std::ofstream f(path, std::ios::binary);
+#endif
+        if (!f) f.open(path, std::ios::binary);
+        if (!f) return 20;
+        f.write(reinterpret_cast<const char*>(data.data()), data.size());
+        if (!f) return 21;
+        return 0;
+    }
 
 #ifdef GEODE_IS_WINDOWS
     std::wstring widePath = Utils::widen(path);
@@ -201,6 +243,60 @@ int Macro::save(std::string author, std::string desc, std::string path, bool jso
     f.close();
 
     return 0;
+}
+
+Macro Macro::importFile(std::filesystem::path path) {
+    if (path.extension() != ".gdr2") {
+        std::ifstream f(path, std::ios::binary);
+        if (!f) {
+            Macro result;
+            result.description = "fail";
+            return result;
+        }
+        f.seekg(0, std::ios::end);
+        size_t fileSize = f.tellg();
+        f.seekg(0, std::ios::beg);
+        std::vector<std::uint8_t> data(fileSize);
+        f.read(reinterpret_cast<char*>(data.data()), fileSize);
+        return Macro::importData(data);
+    }
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f) {
+        Macro result;
+        result.description = "fail";
+        return result;
+    }
+    f.seekg(0, std::ios::end);
+    size_t fileSize = f.tellg();
+    f.seekg(0, std::ios::beg);
+    std::vector<std::uint8_t> data(fileSize);
+    f.read(reinterpret_cast<char*>(data.data()), fileSize);
+
+    auto decoded = gdr2::decode(data);
+    if (!decoded) {
+        Macro result;
+        result.description = "fail";
+        return result;
+    }
+
+    Macro result;
+    result.author = decoded->author;
+    result.description = decoded->description;
+    result.duration = decoded->duration;
+    result.gameVersion = decoded->gameVersion / 10000.f;
+    result.framerate = static_cast<float>(decoded->framerate);
+    result.seed = decoded->seed;
+    result.coins = decoded->coins;
+    result.ldm = decoded->ldm;
+    result.botInfo.name = decoded->botName;
+    result.botInfo.version = std::to_string(decoded->botVersion);
+    result.levelInfo.id = decoded->levelId;
+    result.levelInfo.name = decoded->levelName;
+    result.inputs.reserve(decoded->inputs.size());
+    for (auto const& action : decoded->inputs)
+        result.inputs.emplace_back(static_cast<int>(action.frame), action.button, action.player2, action.down);
+    return result;
 }
 
 bool Macro::loadXDFile(std::filesystem::path path) {

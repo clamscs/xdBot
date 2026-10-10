@@ -8,6 +8,7 @@ class SaveMacroLayer : public geode::Popup {
     TextInput* nameInput = nullptr;
 
     CCMenuItemToggler* jsonToggle = nullptr;
+    CCMenuItemToggler* gdr2Toggle = nullptr;
 
 private:
 
@@ -55,7 +56,7 @@ private:
 
         CCSprite* spriteOn = CCSprite::createWithSpriteFrameName("GJ_checkOn_001.png");
         CCSprite* spriteOff = CCSprite::createWithSpriteFrameName("GJ_checkOff_001.png");
-        jsonToggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, nullptr);
+        jsonToggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleJSON));
         jsonToggle->setPosition({ -124, -78 });
         jsonToggle->setScale(0.575);
         menu->addChild(jsonToggle);
@@ -65,10 +66,28 @@ private:
         lbl->setScale(0.375);
         menu->addChild(lbl);
 
+        gdr2Toggle = CCMenuItemToggler::create(spriteOff, spriteOn, this, menu_selector(SaveMacroLayer::toggleGDR2));
+        gdr2Toggle->setPosition({ 22, -78 });
+        gdr2Toggle->setScale(0.575);
+        menu->addChild(gdr2Toggle);
+
+        lbl = CCLabelBMFont::create("GDR2", "bigFont.fnt");
+        lbl->setPosition({ 53, -77.5 });
+        lbl->setScale(0.375);
+        menu->addChild(lbl);
+
         return true;
     }
 
 public:
+
+    void toggleJSON(CCObject*) {
+        if (jsonToggle->isToggled()) gdr2Toggle->toggle(false);
+    }
+
+    void toggleGDR2(CCObject*) {
+        if (gdr2Toggle->isToggled()) jsonToggle->toggle(false);
+    }
 
     STATIC_CREATE(SaveMacroLayer, 285, 194)
     
@@ -97,7 +116,7 @@ public:
         std::string author = authorInput->getString();
         std::string desc = descInput->getString();
 
-        int result = Macro::save(author, desc, path.string(), jsonToggle->isToggled());
+        int result = Macro::save(author, desc, path.string(), jsonToggle->isToggled(), gdr2Toggle->isToggled());
 
         if (result != 0)
             return FLAlertLayer::create("Error", "There was an error saving the macro. ID: " + std::to_string(result), "Ok")->show();

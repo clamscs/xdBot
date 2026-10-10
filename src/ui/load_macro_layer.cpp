@@ -141,7 +141,7 @@ void LoadMacroLayer::onImportMacro(CCObject*) {
 	file::FilePickOptions::Filter textFilter;
 	file::FilePickOptions fileOptions;
 	textFilter.description = "Macro Files";
-	textFilter.files = { "*.gdr", "*.xd", "*.json" };
+	textFilter.files = { "*.gdr2", "*.gdr", "*.xd", "*.json" };
 	fileOptions.filters.push_back(textFilter);
 
 	m_pickListener.spawn(file::pick(file::PickMode::OpenFile, { dirs::getGameDir(), { textFilter } }), [this](file::PickResult res) {
@@ -172,11 +172,14 @@ void LoadMacroLayer::onImportMacro(CCObject*) {
 				f.read(reinterpret_cast<char*>(macroData.data()), fileSize);
 				f.close();
 
-				tempMacro = Macro::importData(macroData);
+				tempMacro = Macro::importFile(path);
 
 			}
 
-			bool xdMacro = path.extension() == ".xd";
+			if (tempMacro.description == "fail")
+					return FLAlertLayer::create("Error", "There was an error importing this macro. ID: 46", "Ok")->show();
+
+				bool xdMacro = path.extension() == ".xd";
 
 			int iterations = 0;
 
@@ -425,7 +428,7 @@ void LoadMacroLayer::addList(bool refresh, float prevScroll) {
 
 	for (int i = invertSort ? macros.size() - 1 : 0; invertSort ? i >= 0 : i < macros.size(); invertSort ? --i : ++i) {
 
-		if (macros[i].extension() != ".gdr" && macros[i].extension() != ".xd" && macros[i].extension() != ".json") continue;
+		if (macros[i].extension() != ".gdr" && macros[i].extension() != ".gdr2" && macros[i].extension() != ".xd" && macros[i].extension() != ".json") continue;
 
 		std::string name = macros[i].filename().string().substr(0, macros[i].filename().string().find_last_of('.'));
 
@@ -685,7 +688,13 @@ void MacroCell::handleLoad() {
 		f.read(reinterpret_cast<char*>(macroData.data()), fileSize);
 		f.close();
 
-		newMacro = Macro::importData(macroData);
+		newMacro = Macro::importFile(path);
+	}
+
+	if (newMacro.description == "fail") {
+		if (!isMerge)
+			return FLAlertLayer::create("Error", "There was an error loading this macro. ID: 45", "Ok")->show();
+		return;
 	}
 
 	if (isMerge) {
