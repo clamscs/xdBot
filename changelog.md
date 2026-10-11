@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added TCM (.tcm) macro format support for import and export (both v1 and v2).
 
+### Changed
+
+- Reorganized GDR, CMS, SLC, and TCM codecs under `src/formats`.
+- Optimized CMS encoding and validation paths while preserving the CMS v1 wire format.
+- Kept the format layer compatible with the project's C++20 baseline.
+
 ## [3.3.0]
 
 ### Added

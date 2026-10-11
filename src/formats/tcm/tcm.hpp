@@ -115,9 +115,11 @@ struct MetaV2 {
         float tps_or_dt = *reinterpret_cast<const float*>(&bytes[4]);
         uint64_t stored_seed = *reinterpret_cast<const uint64_t*>(&bytes[8]);
         result.seed = stored_seed;
-        result.use_dt = (flags & (1 << 1)) != 0;
+        // Rust reference names this flag `TpsInsteadOfDt`: when set, the
+        // stored value is already TPS; when clear, it is frame duration.
+        result.use_dt = (flags & (1 << 1)) == 0;
         if (result.use_dt) {
-            result.tps = 1.0f / tps_or_dt;
+            result.tps = tps_or_dt > 0.0f ? 1.0f / tps_or_dt : 0.0f;
         } else {
             result.tps = tps_or_dt;
         }

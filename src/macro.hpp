@@ -1,15 +1,12 @@
 #pragma once
 
 #include "includes.hpp"
-#include "gdr/gdr.hpp"
-#include "gdr/gdr2.hpp"
-#include "gdr/cms.hpp"
-#include "slc/slc.hpp"
-#include "tcm/tcm.hpp"
+#include "formats/gdr/gdr.hpp"
+#include "formats/gdr/gdr2.hpp"
+#include "formats/gdr/cms.hpp"
+#include "formats/slc/format.hpp"
+#include "formats/tcm/tcm.hpp"
 #include "utils/utils.hpp"
-
-// Common types
-using slc::v2::Input;
 
 using namespace geode::prelude;
 

@@ -4,6 +4,7 @@
 #include <bit>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -93,9 +94,10 @@ public:
         out = 0;
         for (unsigned shift = 0; shift < 64; shift += 7) {
             if (position >= data.size()) return false;
-            uint8_t byte = data[position++];
-            if (shift == 63 && (byte & 0x7E)) return false;
-            out |= static_cast<uint64_t>(byte & 0x7F) << shift;
+            const uint8_t byte = data[position++];
+            const uint8_t payload = byte & 0x7F;
+            if (shift == 63 && payload > 1) return false;
+            out |= static_cast<uint64_t>(payload) << shift;
             if (!(byte & 0x80)) return true;
         }
         return false;
@@ -158,9 +160,12 @@ inline std::vector<uint8_t> encode(Replay const& replay) {
         deaths = sortedDeaths;
     }
 
-    detail::Writer writer(64 + replay.author.size() + replay.description.size()
-        + replay.botName.size() + replay.levelName.size()
-        + inputs.size() * (replay.platformer ? 2 : 1));
+    const size_t fixedCapacity = 3 + 1 + 1 + sizeof(float) * 2 + 1 + 1;
+    const size_t stringCapacity = replay.author.size() + replay.description.size()
+        + replay.botName.size() + replay.levelName.size();
+    const size_t inputCapacity = inputs.size() * (replay.platformer ? 2 : 1);
+    const size_t deathCapacity = deaths.size() * 2;
+    detail::Writer writer(fixedCapacity + stringCapacity + inputCapacity + deathCapacity);
 
     const uint8_t magic[] = {'C', 'M', 'S'};
     writer.raw(magic);
@@ -239,7 +244,9 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
     replay.levelId = static_cast<uint32_t>(levelId);
 
     uint64_t count;
-    if (!reader.varint(count) || count > reader.remaining()) return std::nullopt;
+    if (!reader.varint(count) || count > reader.remaining()
+        || count > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+        return std::nullopt;
     replay.deaths.reserve(static_cast<size_t>(count));
     uint64_t previous = 0;
     for (uint64_t i = 0; i < count; i++) {
@@ -252,7 +259,9 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
     if (!reader.varint(count)) return std::nullopt;
     // Every input consumes at least one byte, so this is a cheap allocation cap
     // that also avoids overflowing a remaining-bytes multiplication.
-    if (count > reader.remaining()) return std::nullopt;
+    if (count > reader.remaining()
+        || count > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+        return std::nullopt;
     replay.inputs.reserve(static_cast<size_t>(count));
     previous = 0;
     for (uint64_t i = 0; i < count; i++) {
