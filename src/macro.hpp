@@ -8,9 +8,9 @@
 #include "tcm/tcm.hpp"
 #include "utils/utils.hpp"
 
-// Common types from slc namespace
-using slc::Input;
-using slc::InputType;
+// Common types
+using slc::v2::Input;
+using slc::v2::InputType;
 
 using namespace geode::prelude;
 

@@ -451,9 +451,9 @@ Macro Macro::importFile(std::filesystem::path path) {
             for (auto const& action : decodedSLC->m_inputs) {
                 int button;
                 switch (action.m_button) {
-                    case slc::Input::InputType::Jump:  button = 1; break;
-                    case slc::Input::InputType::Left:  button = 2; break;
-                    case slc::Input::InputType::Right: button = 3; break;
+                    case slc::v2::InputType::Jump:  button = 1; break;
+                    case slc::v2::InputType::Left:  button = 2; break;
+                    case slc::v2::InputType::Right: button = 3; break;
                     default: button = 1; break;
                 }
                 result.inputs.emplace_back(static_cast<int>(action.m_frame), button, action.m_player2, action.m_holding);
