@@ -73,13 +73,13 @@ private:
         formatMenu->setVisible(false);
         menu->addChild(formatMenu);
 
-        const char* formats[] = { "GDR", "JSON", "GDR2", "CMS" };
-        for (int i = 0; i < 4; i++) {
+        const char* formats[] = { "GDR", "JSON", "GDR2", "CMS", "SLC", "TCM" };
+        for (int i = 0; i < 6; i++) {
             ButtonSprite* optionSprite = ButtonSprite::create(formats[i], "goldFont.fnt", "GJ_button_04.png");
             optionSprite->setScale(0.48f);
             CCMenuItemSpriteExtra* option = CCMenuItemSpriteExtra::create(optionSprite, this, menu_selector(SaveMacroLayer::selectFormat));
             option->setTag(i);
-            option->setPosition({ (i - 1.5f) * 58.f, 0 });
+            option->setPosition({ (i - 2.5f) * 58.f, 0 });
             formatMenu->addChild(option);
         }
 
@@ -94,7 +94,7 @@ public:
 
     void selectFormat(CCObject* object) {
         selectedFormat = static_cast<CCMenuItemSpriteExtra*>(object)->getTag();
-        const char* formats[] = { "GDR", "JSON", "GDR2", "CMS" };
+        const char* formats[] = { "GDR", "JSON", "GDR2", "CMS", "SLC", "TCM" };
         formatLabel->setString(formats[selectedFormat]);
         formatMenu->setVisible(false);
         auto* sprite = static_cast<ButtonSprite*>(formatButton->getNormalImage());
@@ -128,7 +128,7 @@ public:
         std::string author = authorInput->getString();
         std::string desc = descInput->getString();
 
-        int result = Macro::save(author, desc, path.string(), selectedFormat == 1, selectedFormat == 2, selectedFormat == 3);
+        int result = Macro::save(author, desc, path.string(), selectedFormat == 1, selectedFormat == 2, selectedFormat == 3, selectedFormat == 4, selectedFormat == 5);
 
         if (result != 0)
             return FLAlertLayer::create("Error", "There was an error saving the macro. ID: " + std::to_string(result), "Ok")->show();

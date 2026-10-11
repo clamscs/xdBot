@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+### Added
 
-- Ongoing development changes will be listed here.
+- Added TCM (.tcm) macro format support for import and export (both v1 and v2).
+
+## [3.3.0]
+
+### Added
+
+- Added Silicate (.slc) macro format support for import and export.
+- Export defaults to Silicate v3 format; import supports both v2 and v3.
 
 ## [3.2.2]
 

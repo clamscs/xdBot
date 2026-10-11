@@ -83,7 +83,9 @@ void Macro::tryAutosave(GJGameLevel* level, CheckpointObject* cp) {
     std::error_code ec;
     std::filesystem::remove(path.string() + ".gdr", ec);
     std::filesystem::remove(path.string() + ".gdr2", ec);
-    std::filesystem::remove(path.string() + ".cms", ec); // Remove previous save
+    std::filesystem::remove(path.string() + ".cms", ec);
+    std::filesystem::remove(path.string() + ".slc", ec); // Remove previous save
+    std::filesystem::remove(path.string() + ".tcm", ec);
     if (ec) log::warn("Failed to remove previous autosave");
 
     autoSave(level, g.currentSession);
@@ -144,13 +146,13 @@ void Macro::updateTPS() {
     if (g.layer) static_cast<RecordLayer*>(g.layer)->updateTPS();
 }
 
-int Macro::save(std::string author, std::string desc, std::string path, bool json, bool gdr2, bool cmsFormat) {
+int Macro::save(std::string author, std::string desc, std::string path, bool json, bool gdr2, bool cmsFormat, bool slcFormat, bool tcmFormat) {
     auto& g = Global::get();
 
     if (g.macro.inputs.empty()) return 31;
 
-    std::string extension = cmsFormat ? ".cms" : (gdr2 ? ".gdr2" : (json ? ".gdr.json" : ".gdr"));
-    if (gdr2 || cmsFormat) json = false;
+    std::string extension = tcmFormat ? ".tcm" : (slcFormat ? ".slc" : (cmsFormat ? ".cms" : (gdr2 ? ".gdr2" : (json ? ".gdr.json" : ".gdr"))));
+    if (gdr2 || cmsFormat || slcFormat || tcmFormat) json = false;
 
     int iterations = 0;
 
@@ -210,6 +212,45 @@ int Macro::save(std::string author, std::string desc, std::string path, bool jso
         return 0;
     }
 
+    if (slcFormat) {
+        // Export as Silicate v3 (default)
+        slc::v3::Replay replay;
+        replay.m_meta.m_tps = static_cast<double>(g.macro.framerate);
+        replay.m_meta.m_seed = g.macro.seed;
+
+        uint64_t prevFrame = 0;
+        for (const auto& action : g.macro.inputs) {
+            uint64_t currentFrame = static_cast<uint64_t>(action.frame);
+            uint64_t delta = currentFrame - prevFrame;
+
+            // Map GDR button: 1=Jump, 2=Left, 3=Right to Silicate v3 ActionType
+            slc::v3::ActionType type;
+            switch (action.button) {
+                case 1:  type = slc::v3::ActionType::Jump;  break;
+                case 2:  type = slc::v3::ActionType::Left;  break;
+                case 3:  type = slc::v3::ActionType::Right; break;
+                default: type = slc::v3::ActionType::Jump;   break;
+            }
+
+            replay.m_actions.emplace_back(prevFrame, delta, type, action.down, action.player2);
+            prevFrame = currentFrame;
+        }
+
+        auto data = slc::v3::encode(replay);
+#ifdef GEODE_IS_WINDOWS
+        std::wstring widePath = Utils::widen(path);
+        if (widePath == L"Widen Error") return 30;
+        std::ofstream f(widePath, std::ios::binary);
+#else
+        std::ofstream f(path, std::ios::binary);
+#endif
+        if (!f) f.open(path, std::ios::binary);
+        if (!f) return 20;
+        f.write(reinterpret_cast<const char*>(data.data()), data.size());
+        if (!f) return 21;
+        return 0;
+    }
+
     if (gdr2) {
         gdr2::Replay replay;
         replay.author = g.macro.author;
@@ -233,6 +274,46 @@ int Macro::save(std::string author, std::string desc, std::string path, bool jso
             replay.inputs.push_back({ static_cast<uint64_t>(action.frame), static_cast<uint8_t>(action.button), action.player2, action.down });
 
         auto data = gdr2::encode(replay);
+#ifdef GEODE_IS_WINDOWS
+        std::wstring widePath = Utils::widen(path);
+        if (widePath == L"Widen Error") return 30;
+        std::ofstream f(widePath, std::ios::binary);
+#else
+        std::ofstream f(path, std::ios::binary);
+#endif
+        if (!f) f.open(path, std::ios::binary);
+        if (!f) return 20;
+        f.write(reinterpret_cast<const char*>(data.data()), data.size());
+        if (!f) return 21;
+        return 0;
+    }
+
+    if (tcmFormat) {
+        tcm::Replay replay;
+        replay.tps = g.macro.framerate;
+        replay.seed = g.macro.seed;
+
+        std::vector<tcm::Input> sorted_inputs;
+        for (auto const& action : g.macro.inputs) {
+            tcm::Input input;
+            input.frame = static_cast<uint64_t>(action.frame);
+            input.button = static_cast<uint8_t>(action.button);
+            input.player2 = action.player2;
+            input.down = action.down;
+
+            if (action.down) {
+                input.type = static_cast<tcm::InputType>(action.button);
+            } else {
+                input.type = static_cast<tcm::InputType>(action.button);
+            }
+            sorted_inputs.push_back(input);
+        }
+
+        std::stable_sort(sorted_inputs.begin(), sorted_inputs.end(),
+            [](const tcm::Input& a, const tcm::Input& b) { return a.frame < b.frame; });
+        replay.inputs = std::move(sorted_inputs);
+
+        auto data = tcm::encode(replay, 2);
 #ifdef GEODE_IS_WINDOWS
         std::wstring widePath = Utils::widen(path);
         if (widePath == L"Widen Error") return 30;
@@ -284,7 +365,7 @@ int Macro::save(std::string author, std::string desc, std::string path, bool jso
 }
 
 Macro Macro::importFile(std::filesystem::path path) {
-    if (path.extension() != ".gdr2" && path.extension() != ".cms") {
+    if (path.extension() != ".gdr2" && path.extension() != ".cms" && path.extension() != ".slc" && path.extension() != ".tcm") {
         std::ifstream f(path, std::ios::binary);
         if (!f) {
             Macro result;
@@ -334,6 +415,87 @@ Macro Macro::importFile(std::filesystem::path path) {
         result.levelInfo.name = decodedCMS->levelName;
         for (auto const& action : decodedCMS->inputs)
             result.inputs.emplace_back(static_cast<int>(action.frame), action.button, action.player2, action.down);
+        return result;
+    }
+
+    if (path.extension() == ".slc") {
+        auto decodedSLC = slc::decodeAuto(data);
+        if (!decodedSLC) {
+            Macro result;
+            result.description = "fail";
+            return result;
+        }
+
+        Macro result;
+        result.framerate = static_cast<float>(decodedSLC->m_tps);
+        result.botInfo.name = "slc";
+        result.botInfo.version = "1";
+        result.levelInfo.id = 0;
+        result.levelInfo.name = "";
+        result.author = "";
+        result.description = "";
+        result.seed = 0;
+
+        if (decodedSLC->isV3) {
+            // Handle v3 format (action-based)
+            result.duration = decodedSLC->m_actions.empty() ? 0.f : decodedSLC->m_actions.back().m_frame / result.framerate;
+            for (const auto& action : decodedSLC->m_actions) {
+                // Silicate v3 ActionType: Jump=1, Left=2, Right=3, Restart=4, etc.
+                // GDR button: 1=Jump, 2=Left, 3=Right
+                if (!action.isPlayer()) {
+                    // Skip non-player actions (Restart, Death, TPS, etc.)
+                    continue;
+                }
+                int button = static_cast<int>(action.m_type); // Directly maps: 1=Jump, 2=Left, 3=Right
+                result.inputs.emplace_back(static_cast<int>(action.m_frame), button, action.m_player2, action.m_holding);
+            }
+        } else {
+            // Handle v2 format (input-based)
+            result.duration = decodedSLC->m_inputs.empty() ? 0.f : decodedSLC->m_inputs.back().m_frame / result.framerate;
+            for (auto const& action : decodedSLC->m_inputs) {
+                int button;
+                switch (action.m_button) {
+                    case slc::Input::InputType::Jump:  button = 1; break;
+                    case slc::Input::InputType::Left:  button = 2; break;
+                    case slc::Input::InputType::Right: button = 3; break;
+                    default: button = 1; break;
+                }
+                result.inputs.emplace_back(static_cast<int>(action.m_frame), button, action.m_player2, action.m_holding);
+            }
+        }
+        return result;
+    }
+
+    if (path.extension() == ".tcm") {
+        auto decoded = tcm::decode(std::span<const uint8_t>(data));
+        if (!decoded) {
+            Macro result;
+            result.description = "fail";
+            return result;
+        }
+
+        Macro result;
+        result.framerate = decoded->tps;
+        result.seed = decoded->seed;
+        result.botInfo.name = "tcm";
+        result.botInfo.version = "1";
+        result.levelInfo.id = 0;
+        result.levelInfo.name = "";
+        result.author = "";
+        result.description = "";
+        result.duration = decoded->inputs.empty() ? 0.f : decoded->inputs.back().frame / result.framerate;
+
+        for (const auto& input : decoded->inputs) {
+            int button = 1;
+            switch (input.type) {
+                case tcm::InputType::Jump: button = 1; break;
+                case tcm::InputType::Left: button = 2; break;
+                case tcm::InputType::Right: button = 3; break;
+                default: button = static_cast<int>(input.type); break;
+            }
+            result.inputs.emplace_back(static_cast<int>(input.frame), button, input.player2, input.down);
+        }
+
         return result;
     }
 
