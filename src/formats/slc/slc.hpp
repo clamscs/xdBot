@@ -3,8 +3,8 @@
 
 #include "util.hpp"
 
-#include "formats/v2.hpp"
-#include "formats/v3.hpp"
+#include "v2.hpp"
+#include "v3.hpp"
 
 SLC_NS_BEGIN
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "formats/slc/slc.hpp"
+#include "slc.hpp"
 
 #include <cstring>
 #include <optional>

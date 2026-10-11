@@ -1,10 +1,10 @@
 #ifndef SLC_FORMATS_V2_HPP
 #define SLC_FORMATS_V2_HPP
 
-#include "formats/slc/util.hpp"
+#include "util.hpp"
 
 #include <cstring>
-#include "formats/slc/expected.hpp"
+#include "expected.hpp"
 #include <iostream>
 #include <type_traits>
 #include <vector>

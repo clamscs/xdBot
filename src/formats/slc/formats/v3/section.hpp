@@ -1,9 +1,9 @@
 #ifndef _SLC_V3_SECTION_HPP
 #define _SLC_V3_SECTION_HPP
 
-#include "formats/slc/formats/v3/action.hpp"
-#include "formats/slc/formats/v3/error.hpp"
-#include "formats/slc/util.hpp"
+#include "action.hpp"
+#include "error.hpp"
+#include "../../util.hpp"
 
 #include <cassert>
 #include <vector>

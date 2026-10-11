@@ -1,7 +1,7 @@
 #ifndef _SLC_V3_ACTION_HPP
 #define _SLC_V3_ACTION_HPP
 
-#include "formats/slc/util.hpp"
+#include "../../util.hpp"
 #include <cassert>
 
 SLC_NS_BEGIN

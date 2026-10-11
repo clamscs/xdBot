@@ -1,8 +1,8 @@
 #ifndef _SLC_V3_ERROR_HPP
 #define _SLC_V3_ERROR_HPP
 
-#include "formats/slc/util.hpp"
-#include "formats/slc/expected.hpp"
+#include "../../util.hpp"
+#include "../../expected.hpp"
 #include <string>
 
 SLC_NS_BEGIN
