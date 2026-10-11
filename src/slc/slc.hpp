@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -561,10 +562,16 @@ struct Section {
             case SpecialType::Restart:
             case SpecialType::RestartFull:
             case SpecialType::Death:
-                bytes.insert(bytes.end(), reinterpret_cast<uint8_t*>(&m_seed), reinterpret_cast<uint8_t*>(&m_seed) + 8);
+                {
+                    const uint8_t* seedBytes = reinterpret_cast<const uint8_t*>(&m_seed);
+                    bytes.insert(bytes.end(), seedBytes, seedBytes + 8);
+                }
                 break;
             case SpecialType::TPS:
-                bytes.insert(bytes.end(), reinterpret_cast<uint8_t*>(&m_tps), reinterpret_cast<uint8_t*>(&m_tps) + 8);
+                {
+                    const uint8_t* tpsBytes = reinterpret_cast<const uint8_t*>(&m_tps);
+                    bytes.insert(bytes.end(), tpsBytes, tpsBytes + 8);
+                }
                 break;
             case SpecialType::Bugpoint:
                 break;
@@ -581,7 +588,7 @@ inline bool swiftCompatible(std::vector<Action> &actions, size_t i) {
            actions[i - 1].m_holding != actions[i].m_holding &&
            actions[i - 1].m_player2 == actions[i].m_player2 &&
            actions[i - 1].m_type == actions[i].m_type &&
-           actions[i].m_type == Action::ActionType::Jump;
+           actions[i].m_type == ActionType::Jump;
 }
 
 inline bool canJoin(std::vector<Action> &actions, size_t count, size_t i) {
@@ -600,7 +607,7 @@ inline bool prepareSections(std::vector<Action> &actions, std::vector<Section> &
             s.m_special = actions[i];
             s.m_deltaSize = actions[i].getMinimumSize();
 
-            using A = Action::ActionType;
+            using A = ActionType;
             switch (actions[i].m_type) {
             case A::TPS:
                 s.m_tps = actions[i].m_tps;
@@ -786,12 +793,12 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
                 prevFrame = currentFrame;
 
                 if (button == 0) { // Swift
-                    replay.m_actions.emplace_back(currentFrame - delta, delta, Action::ActionType::Jump, true, player2);
+                    replay.m_actions.emplace_back(currentFrame - delta, delta, ActionType::Jump, true, player2);
                     replay.m_actions.back().m_swift = true;
-                    replay.m_actions.emplace_back(currentFrame, 0, Action::ActionType::Jump, false, player2);
+                    replay.m_actions.emplace_back(currentFrame, 0, ActionType::Jump, false, player2);
                     replay.m_actions.back().m_swift = true;
                 } else {
-                    replay.m_actions.emplace_back(prevFrame, delta, static_cast<Action::ActionType>(button), holding, player2);
+                    replay.m_actions.emplace_back(prevFrame, delta, static_cast<ActionType>(button), holding, player2);
                 }
             }
         } else if (id == 1) { // Repeat section
@@ -823,12 +830,12 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
                     auto &p = cluster[j];
                     prevFrame = replay.m_actions.empty() ? 0 : replay.m_actions.back().m_frame;
                     if (p.m_button == PlayerInput::Button::Swift) {
-                        replay.m_actions.emplace_back(prevFrame, p.m_delta, Action::ActionType::Jump, true, p.m_player2);
+                        replay.m_actions.emplace_back(prevFrame, p.m_delta, ActionType::Jump, true, p.m_player2);
                         replay.m_actions.back().m_swift = true;
-                        replay.m_actions.emplace_back(prevFrame + p.m_delta, 0, Action::ActionType::Jump, false, p.m_player2);
+                        replay.m_actions.emplace_back(prevFrame + p.m_delta, 0, ActionType::Jump, false, p.m_player2);
                         replay.m_actions.back().m_swift = true;
                     } else {
-                        replay.m_actions.emplace_back(prevFrame, p.m_delta, static_cast<Action::ActionType>(p.m_button), p.m_holding, p.m_player2);
+                        replay.m_actions.emplace_back(prevFrame, p.m_delta, static_cast<ActionType>(p.m_button), p.m_holding, p.m_player2);
                     }
                 }
             }
@@ -863,11 +870,11 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
                 uint64_t seed;
                 std::memcpy(&seed, data.data() + pos, 8);
                 pos += 8;
-                replay.m_actions.emplace_back(prevFrame, delta, static_cast<Action::ActionType>(static_cast<int>(specialType) + 4), seed);
+                replay.m_actions.emplace_back(prevFrame, delta, static_cast<ActionType>(static_cast<int>(specialType) + 4), seed);
                 break;
             }
             case SpecialType::Bugpoint:
-                replay.m_actions.emplace_back(prevFrame, delta, Action::ActionType::Bugpoint);
+                replay.m_actions.emplace_back(prevFrame, delta, ActionType::Bugpoint);
                 break;
             }
         }
@@ -884,7 +891,7 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
 // Common Replay type that auto-detects format
 struct Replay {
     double m_tps = 240.0;
-    std::vector<Input> m_inputs; // v2 style
+    std::vector<v2::Input> m_inputs; // v2 style
     std::vector<v3::Action> m_actions; // v3 style
     bool isV3 = false;
 };

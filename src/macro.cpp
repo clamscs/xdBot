@@ -301,11 +301,7 @@ int Macro::save(std::string author, std::string desc, std::string path, bool jso
             input.player2 = action.player2;
             input.down = action.down;
 
-            if (action.down) {
-                input.type = static_cast<tcm::InputType>(action.button);
-            } else {
-                input.type = static_cast<tcm::InputType>(action.button);
-            }
+            input.type = static_cast<tcm::InputType>(action.button);
             sorted_inputs.push_back(input);
         }
 
