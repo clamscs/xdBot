@@ -10,7 +10,6 @@
 
 // Common types
 using slc::v2::Input;
-using slc::v2::InputType;
 
 using namespace geode::prelude;
 
