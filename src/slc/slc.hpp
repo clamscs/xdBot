@@ -250,11 +250,13 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
     uint64_t count;
     std::memcpy(&count, data.data() + pos, 8);
     pos += 8;
+    if (count > 10'000'000) return std::nullopt;
 
     // Read blob count
     uint64_t blobCount;
     std::memcpy(&blobCount, data.data() + pos, 8);
     pos += 8;
+    if (blobCount > count) return std::nullopt;
 
     // Read blob metadata
     struct BlobInfo {
@@ -282,6 +284,9 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
     uint64_t frame = 0;
     for (const auto& blob : blobs) {
         if (blob.length <= 0) continue;
+
+        // Validate blob doesn't reference inputs out of range
+        if (blob.start >= count || blob.start + blob.length > count) return std::nullopt;
 
         for (uint64_t i = 0; i < blob.length; i++) {
             if (pos + blob.byteSize > data.size()) return std::nullopt;
@@ -756,6 +761,7 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
     uint64_t actionCount;
     std::memcpy(&actionCount, data.data() + pos, 8);
     pos += 8;
+    if (actionCount > 10'000'000) return std::nullopt;
 
     replay.m_actions.reserve(actionCount);
 
@@ -809,6 +815,8 @@ inline std::optional<Replay> decode(std::span<const uint8_t> data) {
             uint64_t byteSize = 1ull << deltaSize;
             uint64_t count = 1ull << countExp;
             uint64_t repeats = 1ull << repeatsExp;
+            // Cap repeats to prevent memory exhaustion from malformed files
+            if (repeats > 100000) return std::nullopt;
 
             // Read the base cluster
             uint64_t prevFrame = replay.m_actions.empty() ? 0 : replay.m_actions.back().m_frame;

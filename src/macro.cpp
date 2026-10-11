@@ -424,6 +424,7 @@ Macro Macro::importFile(std::filesystem::path path) {
 
         Macro result;
         result.framerate = static_cast<float>(decodedSLC->m_tps);
+        result.gameVersion = 2.206f;
         result.botInfo.name = "slc";
         result.botInfo.version = "1";
         result.levelInfo.id = 0;
@@ -434,7 +435,9 @@ Macro Macro::importFile(std::filesystem::path path) {
 
         if (decodedSLC->isV3) {
             // Handle v3 format (action-based)
-            result.duration = decodedSLC->m_actions.empty() ? 0.f : decodedSLC->m_actions.back().m_frame / result.framerate;
+            result.duration = (result.framerate != 0.f && !decodedSLC->m_actions.empty())
+                ? static_cast<float>(decodedSLC->m_actions.back().m_frame / result.framerate)
+                : 0.f;
             for (const auto& action : decodedSLC->m_actions) {
                 // Silicate v3 ActionType: Jump=1, Left=2, Right=3, Restart=4, etc.
                 // GDR button: 1=Jump, 2=Left, 3=Right
@@ -447,7 +450,9 @@ Macro Macro::importFile(std::filesystem::path path) {
             }
         } else {
             // Handle v2 format (input-based)
-            result.duration = decodedSLC->m_inputs.empty() ? 0.f : decodedSLC->m_inputs.back().m_frame / result.framerate;
+            result.duration = (result.framerate != 0.f && !decodedSLC->m_inputs.empty())
+                ? static_cast<float>(decodedSLC->m_inputs.back().m_frame / result.framerate)
+                : 0.f;
             for (auto const& action : decodedSLC->m_inputs) {
                 int button;
                 switch (action.m_button) {
@@ -472,6 +477,7 @@ Macro Macro::importFile(std::filesystem::path path) {
 
         Macro result;
         result.framerate = decoded->tps;
+        result.gameVersion = 2.206f;
         result.seed = decoded->seed;
         result.botInfo.name = "tcm";
         result.botInfo.version = "1";
@@ -479,7 +485,9 @@ Macro Macro::importFile(std::filesystem::path path) {
         result.levelInfo.name = "";
         result.author = "";
         result.description = "";
-        result.duration = decoded->inputs.empty() ? 0.f : decoded->inputs.back().frame / result.framerate;
+        result.duration = (result.framerate != 0.f && !decoded->inputs.empty())
+            ? static_cast<float>(decoded->inputs.back().frame / result.framerate)
+            : 0.f;
 
         for (const auto& input : decoded->inputs) {
             int button = 1;
