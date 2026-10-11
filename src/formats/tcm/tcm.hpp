@@ -330,7 +330,7 @@ namespace v2 {
     inline uint8_t serialize_input(const Input& input, bool swift) {
         if (input.type >= InputType::Jump && input.type <= InputType::Right) {
             // Vanilla: button (bits 0-1), push (bit 2), player2 (bit 3), swift (bit 4)
-            uint8_t button_val = (static_cast<uint8_t>(input.type) - 1) & BUTTON_MASK;
+            uint8_t button_val = static_cast<uint8_t>(input.type) & BUTTON_MASK;
             return button_val |
                 ((input.down ? 1u : 0u) << PUSH_OFFSET) |
                 ((input.player2 ? 1u : 0u) << PLAYER2_OFFSET) |
@@ -364,105 +364,88 @@ namespace v2 {
         meta.to_bytes(meta_bytes);
         w.raw(std::span<const uint8_t>(meta_bytes, META_SIZE));
 
-        if (replay.inputs.empty()) return std::move(w.bytes);
-
-        std::vector<Input> sorted_inputs = replay.inputs;
-        std::stable_sort(sorted_inputs.begin(), sorted_inputs.end(),
-            [](const Input& a, const Input& b) { return a.frame < b.frame; });
-
-        w.varint(sorted_inputs[0].frame);
+        // Frames are local to a run and may move backwards after a restart;
+        // preserve the supplied chronological order instead of sorting them.
+        const auto& inputs = replay.inputs;
+        w.varint(inputs.empty() ? 0 : inputs[0].frame);
 
         uint64_t last_delta = 0;
+        uint64_t current_frame = inputs.empty() ? 0 : inputs[0].frame;
 
         size_t i = 0;
-        while (i < sorted_inputs.size()) {
-            const Input& input = sorted_inputs[i];
+        while (i < inputs.size()) {
+            const Input& input = inputs[i];
 
-            // Check for swift
             bool is_swift = false;
-            if (i + 1 < sorted_inputs.size()) {
-                const Input& next = sorted_inputs[i + 1];
-                if (next.frame == input.frame &&
+            if (i + 1 < inputs.size()) {
+                const Input& next = inputs[i + 1];
+                is_swift = next.frame == input.frame &&
                     next.type == input.type &&
                     next.button == input.button &&
                     next.player2 == input.player2 &&
-                    next.down != input.down) {
-                    is_swift = true;
-                }
+                    next.down != input.down;
             }
 
-            // Compute delta to next significant input
-            uint64_t next_idx = i + (is_swift ? 2 : 1);
-            uint64_t next_frame = (next_idx < sorted_inputs.size())
-                ? sorted_inputs[next_idx].frame : input.frame;
-            uint64_t delta = next_frame - input.frame;
+            size_t next_idx = i + (is_swift ? 2 : 1);
+            uint64_t delta = 0;
+            if (next_idx < inputs.size()) {
+                const Input& next = inputs[next_idx];
+                bool resets_frame = input.type >= InputType::Restart &&
+                    input.type <= InputType::Death;
+                uint64_t base_frame = resets_frame ? 0 : current_frame;
+                if (next.frame < base_frame) return {};
+                delta = next.frame - base_frame;
+            }
 
-            // Compute delta blob info
-            // Following Rust logic: try non-magic first, then magic, for each blob size from smallest
             uint64_t delta_value = delta;
             bool use_magic = false;
             uint8_t blob_size_code = 0;
-
             if (delta > 0) {
-                // Try each blob size starting from smallest (One, Two, Four)
-                for (int b = 1; b <= 3; b++) {
+                for (uint8_t b = 1; b <= 3; b++) {
                     if (delta <= blob_max_val(b)) {
-                        // delta fits without magic
-                        blob_size_code = static_cast<uint8_t>(b);
-                        delta_value = delta;
-                        use_magic = false;
-                        goto delta_done;
+                        blob_size_code = b;
+                        break;
                     }
-                    // Try magic: delta - last_delta
-                    if (last_delta != 0 && last_delta <= delta) {
-                        uint64_t magic_delta = delta - last_delta;
-                        if (magic_delta > 0 && magic_delta <= blob_max_val(b)) {
-                            blob_size_code = static_cast<uint8_t>(b);
-                            delta_value = magic_delta;
-                            use_magic = true;
-                            goto delta_done;
-                        }
+                    if (last_delta != 0 && delta > last_delta &&
+                        delta - last_delta <= blob_max_val(b)) {
+                        blob_size_code = b;
+                        delta_value = delta - last_delta;
+                        use_magic = true;
+                        break;
                     }
                 }
-                // If nothing fit, delta is too big for any blob
-                // In practice this shouldn't happen with sane delta values
-                blob_size_code = 3;
-                delta_value = delta;
-                use_magic = false;
+                if (blob_size_code == 0) {
+                    blob_size_code = 3;
+                    delta_value = delta;
+                }
             }
-            delta_done:;
 
-            uint8_t delta_byte = (blob_size_code << 1) | (use_magic ? 1 : 0);
-
-            // Serialize input byte (lower 5 bits)
             uint8_t input_byte = serialize_input(input, is_swift);
-
-            // Combine
+            uint8_t delta_byte = static_cast<uint8_t>((blob_size_code << 1) |
+                (use_magic ? 1 : 0));
             uint8_t combined = (input_byte & 0x1F) | (delta_byte << DELTA_OFFSET);
             w.raw_bytes(&combined, 1);
 
-            // Extra data for non-vanilla inputs
+            // Delta bytes precede special-input payloads in the v2 stream.
+            if (delta > 0) {
+                uint8_t bytes_to_write = blob_size_code == 3 ? 4 : blob_size_code;
+                w.raw_bytes(&delta_value, bytes_to_write);
+                last_delta = delta;
+            }
+
             if (input.type == InputType::TPS) {
                 w.le(input.tps);
             } else if (input.type == InputType::Bugpoint) {
                 w.le(input.seed);
             } else if (input.type >= InputType::Restart && input.type <= InputType::Death) {
-                // Restart types: write seed if extra flag is set
                 uint8_t base = serialize_input(input, false);
-                if (base & EXTRA_MASK) {
-                    w.le(input.seed);
-                }
+                if (base & EXTRA_MASK) w.le(input.seed);
             }
 
-            // Write delta data if needed
-            if (delta > 0) {
-                uint8_t bytes_to_write = blob_size_code;  // 0=no bytes, 1=1byte, 2=2bytes, 3=4bytes
-                if (bytes_to_write == 3) bytes_to_write = 4;
-                w.raw_bytes(&delta_value, bytes_to_write);
-                last_delta = delta;
-            }
-
-            i += (is_swift ? 2 : 1);
+            bool resets_frame = input.type >= InputType::Restart &&
+                input.type <= InputType::Death;
+            current_frame = (resets_frame ? 0 : current_frame) + delta;
+            i += is_swift ? 2 : 1;
         }
 
         return std::move(w.bytes);
